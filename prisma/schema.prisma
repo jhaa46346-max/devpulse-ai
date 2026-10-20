@@ -1,0 +1,172 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String?
+  passwordHash String?
+  role         String     @default("developer")
+  avatarUrl    String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  projects     Project[]
+  analyses     Analysis[]
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+model Project {
+  id              String            @id @default(cuid())
+  name            String
+  description     String?
+  language        String            @default("TypeScript")
+  repositoryUrl   String?
+  healthScore     Int               @default(100)
+  securityScore   Int               @default(100)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  userId          String?
+  user            User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  files           File[]
+  analyses        Analysis[]
+  issues          Issue[]
+  securityFindings SecurityFinding[]
+  chatSessions    ChatSession[]
+
+  @@index([userId])
+  @@index([name])
+}
+
+model File {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  path      String
+  name      String
+  language  String
+  content   String
+  sizeBytes Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, path])
+  @@index([projectId])
+}
+
+model Analysis {
+  id               String            @id @default(cuid())
+  projectId        String
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status           String            @default("completed") // completed, processing, failed
+  summary          String?
+  codeQualityScore Int               @default(100)
+  securityScore    Int               @default(100)
+  totalIssues      Int               @default(0)
+  criticalIssues   Int               @default(0)
+  durationMs       Int               @default(0)
+  
+  userId           String?
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  issues           Issue[]
+  securityFindings SecurityFinding[]
+
+  @@index([projectId])
+  @@index([createdAt])
+}
+
+model Issue {
+  id             String    @id @default(cuid())
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  analysisId     String?
+  analysis       Analysis? @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  severity       String    // critical, high, medium, low, info
+  category       String    // bug, smell, performance, readability
+  title          String
+  description    String
+  location       String
+  lineStart      Int?
+  lineEnd        Int?
+  recommendation String
+  status         String    @default("open") // open, resolved, ignored
+  createdAt      DateTime  @default(now())
+
+  @@index([projectId])
+  @@index([severity])
+}
+
+model SecurityFinding {
+  id             String    @id @default(cuid())
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  analysisId     String?
+  analysis       Analysis? @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  severity       String    // critical, high, medium, low, info
+  category       String    // static, potential, informational
+  cwe            String?   // e.g. CWE-89
+  title          String
+  description    String
+  location       String
+  lineStart      Int?
+  lineEnd        Int?
+  risk           String
+  remediation    String
+  status         String    @default("active") // active, remediated, false_positive
+  createdAt      DateTime  @default(now())
+
+  @@index([projectId])
+  @@index([severity])
+  @@index([cwe])
+}
+
+model ChatSession {
+  id        String        @id @default(cuid())
+  projectId String
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title     String        @default("New Session")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  messages  ChatMessage[]
+
+  @@index([projectId])
+}
+
+model ChatMessage {
+  id            String      @id @default(cuid())
+  chatSessionId String
+  chatSession   ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
+  sender        String      // user, assistant
+  content       String
+  codeSnippet   String?
+  createdAt     DateTime    @default(now())
+
+  @@index([chatSessionId])
+}
